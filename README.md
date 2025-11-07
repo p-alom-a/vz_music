@@ -1,3 +1,12 @@
+---
+title: Shazam Visual
+emoji: 🎵
+colorFrom: purple
+colorTo: pink
+sdk: docker
+pinned: false
+---
+
 # 🎵 Shazam Visual - Album Cover Search
 
 Visual search engine for album covers using **CLIP** embeddings and **FAISS**. Find similar albums by uploading an image or describing what you're looking for!
