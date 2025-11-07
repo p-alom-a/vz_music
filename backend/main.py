@@ -18,8 +18,9 @@ app.add_middleware(
         "http://localhost:3000",
         "https://*.railway.app",  # Railway frontend URLs
         "https://*.up.railway.app",  # Railway backend URLs
+        "https://*.hf.space",  # HuggingFace Spaces
     ],
-    allow_origin_regex=r"https://.*\.railway\.app",  # Regex for Railway domains
+    allow_origin_regex=r"https://.*\.(railway\.app|hf\.space)",  # Regex for Railway and HF domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
