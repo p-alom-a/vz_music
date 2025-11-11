@@ -26,7 +26,7 @@ class AlbumSearchEngine:
 
         print(f"✅ Ready! {self.index.ntotal} albums indexed")
 
-    def search_by_image(self, image: Image.Image, k: int = 5):
+    def search_by_image(self, image: Image.Image, k: int = 50):
         """Search by image, return top k results"""
         # Generate embedding
         inputs = self.processor(images=image, return_tensors="pt").to(self.device)
@@ -48,7 +48,7 @@ class AlbumSearchEngine:
 
         return results
 
-    def search_by_text(self, query: str, k: int = 5):
+    def search_by_text(self, query: str, k: int = 50):
         """Search by text description, return top k results"""
         start_time = time.time()
         print(f"🔍 Starting text search for: '{query}'")

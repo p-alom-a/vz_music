@@ -42,7 +42,7 @@ metadata = None
 # Constants
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 MAX_K = 50
-DEFAULT_K = 10
+DEFAULT_K = 50
 MODELS_DIR = "models"
 IMAGES_DIR = "images"
 
