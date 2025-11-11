@@ -9,20 +9,23 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY backend/requirements.txt ./
+COPY requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code and models
-COPY backend/ ./backend/
+# Copy app code
+COPY app.py ./
 
-# Change to backend directory
-WORKDIR /app/backend
+# Copy models directory (will be populated by Git LFS)
+COPY models/ ./models/
+
+# Copy images directory (if present)
+COPY images/ ./images/
 
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860
 
-# Start uvicorn directly (no need for start.sh on HF Spaces)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start uvicorn with app.py at root
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
