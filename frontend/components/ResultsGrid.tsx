@@ -63,8 +63,8 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
               <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                 <div>
                   <p className="text-xs text-gray-500">Genre</p>
-                  <p className="text-xs text-gray-700 truncate" title={result.genre}>
-                    {result.genre.split('/')[0]}
+                  <p className="text-xs text-gray-700 truncate" title={result.genre || 'Unknown'}>
+                    {result.genre ? result.genre.split('/')[0] : 'Unknown'}
                   </p>
                 </div>
                 {result.release_year && (
