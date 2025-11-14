@@ -23,7 +23,7 @@ export default function SearchByText() {
     setError(null);
 
     try {
-      const response = await searchByText(query, 5);
+      const response = await searchByText(query, 10);
       setResults(response.results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');

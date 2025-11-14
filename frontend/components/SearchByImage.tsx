@@ -45,7 +45,7 @@ export default function SearchByImage() {
     setError(null);
 
     try {
-      const response = await searchByImage(file, 5);
+      const response = await searchByImage(file, 10);
       setResults(response.results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
