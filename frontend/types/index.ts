@@ -1,14 +1,12 @@
 export interface SearchResult {
-  album_id: number;
+  id: string;
   artist: string;
   album_name: string;
   genre: string;
   release_year: number | null;
-  similarity_score: number;
+  similarity: number;
   pitchfork_score: number | null;
-  best_new_music: boolean;
-  image_url: string;
-  cover_url_original: string;
+  cover_url: string;
 }
 
 export interface SearchResponse {

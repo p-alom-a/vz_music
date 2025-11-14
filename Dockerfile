@@ -18,12 +18,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy app code
 COPY app.py ./
 
-# Copy models directory (will be populated by Git LFS)
-COPY models/ ./models/
-
-# Copy images directory (if present)
-COPY images/ ./images/
-
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860
 

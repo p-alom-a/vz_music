@@ -1,468 +1,340 @@
-# 🚀 Instructions Claude Code - Déploiement HF Space Backend
+# 🔄 Migration Backend : FAISS → Supabase
 
 ## 📋 Contexte
 
-Application de recherche visuelle d'albums musicaux (Shazam Visual) utilisant :
-- **25,790 pochettes d'albums** (dataset Pitchfork)
-- **Embeddings CLIP** (modèle : openai/clip-vit-base-patch32)
-- **Index FAISS** pour recherche de similarité
-- **FastAPI** pour l'API backend
-
-**Objectif :** Créer la structure complète pour déploiement sur Hugging Face Space.
+Le backend actuel utilise **FAISS** pour le stockage et la recherche vectorielle. On migre vers **Supabase (PostgreSQL + pgvector)** pour avoir une vraie base de données avec métadonnées structurées.
 
 ---
 
-## 📁 Structure à créer
+## 🎯 Changements à Faire
 
+### **1. Dépendances (`requirements.txt`)**
+
+**Ajouter :**
+```txt
+supabase
 ```
-hf-space-deploy/
-├── app.py                    # API FastAPI principale
-├── requirements.txt          # Dépendances Python
-├── README.md                 # Documentation du Space
-├── .gitignore               # Fichiers à ignorer
-├── models/                   # Dossier pour fichiers ML
-│   ├── .gitkeep             # Placeholder (vrais fichiers uploadés manuellement)
-│   └── README.txt           # Instructions pour placer les fichiers
-└── images/                   # Dossier pour pochettes
-    ├── .gitkeep             # Placeholder
-    └── README.txt           # Instructions pour upload
+
+**Retirer (optionnel) :**
+```txt
+faiss-cpu  # Plus nécessaire
 ```
 
 ---
 
-## 🔧 Fichier 1 : `app.py`
+### **2. Variables d'Environnement**
 
-### Spécifications
-
-**Imports requis :**
-- FastAPI, uvicorn
-- transformers (CLIPModel, CLIPProcessor)
-- torch
-- faiss
-- PIL (Image)
-- numpy
-- json, os, io
-
-**Configuration au démarrage :**
-```
-1. Charger CLIP (openai/clip-vit-base-patch32) sur CPU
-2. Charger index FAISS depuis models/album_covers.index
-3. Charger métadonnées depuis models/valid_metadata_final.json
-4. Logs clairs pour chaque étape
+**Ajouter dans les secrets HuggingFace Space :**
+```env
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_KEY=eyJhbGc...  # service_role key
 ```
 
-**CORS Configuration :**
+---
+
+### **3. Structure de Données Supabase**
+
+**Table existante : `album_covers`**
+
+```sql
+CREATE TABLE album_covers (
+  id text PRIMARY KEY,
+  embedding vector(512),
+  artist text,
+  album_name text,
+  genre text,
+  release_year integer,
+  pitchfork_score numeric,
+  best_new_music boolean,
+  cover_url text,
+  reviewer text,
+  metadata jsonb
+);
+
+-- Index HNSW pour recherche rapide
+CREATE INDEX album_covers_embedding_idx 
+ON album_covers 
+USING hnsw (embedding vector_cosine_ops);
 ```
-allow_origins = ["*"]  # Permissif pour l'instant
-allow_methods = ["*"]
-allow_headers = ["*"]
+
+**Fonction RPC existante : `search_albums`**
+
+```sql
+CREATE FUNCTION search_albums(
+  query_embedding vector(512),
+  match_threshold float DEFAULT 0.0,
+  match_count int DEFAULT 10,
+  filter_genre text DEFAULT NULL
+)
+RETURNS TABLE (
+  id text,
+  artist text,
+  album_name text,
+  genre text,
+  release_year integer,
+  pitchfork_score numeric,
+  cover_url text,
+  similarity float
+)
 ```
 
-### Endpoints à implémenter
+---
 
-#### **GET `/`**
-- Retourne informations sur l'API
-- Liste des endpoints disponibles
-- Stats : nombre d'albums indexés
+### **4. Code Backend (`app.py`)**
 
-#### **GET `/health`**
-- Status de l'API
-- Confirme que modèles sont chargés
-- Temps de réponse
+#### **A. Initialisation**
 
-#### **POST `/api/search-by-image`**
-**Paramètres :**
-- `file`: UploadFile (image)
-- `k`: int (optionnel, default=10, max=50) - nombre de résultats
+**Remplacer :**
+```python
+# Ancien code FAISS
+import faiss
+index = faiss.read_index("album_index.faiss")
+metadata = load_metadata()
+```
 
-**Processus :**
-1. Valider que c'est une image
-2. Ouvrir avec PIL et convertir en RGB
-3. Générer embedding CLIP (image features)
-4. Normaliser L2
-5. Rechercher dans FAISS (top k)
-6. Récupérer métadonnées pour chaque résultat
-7. Construire URLs images : `/api/image/{album_id}`
+**Par :**
+```python
+# Nouveau code Supabase
+from supabase import create_client
+import os
 
-**Retour JSON :**
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+```
+
+---
+
+#### **B. Recherche par Texte**
+
+**Remplacer :**
+```python
+@app.get("/api/search-by-text")
+def search_by_text(query: str, k: int = 10):
+    embedding = generate_text_embedding(query)
+    
+    # Ancien : recherche FAISS
+    distances, indices = index.search(embedding, k)
+    results = [metadata[i] for i in indices[0]]
+    
+    return {"results": results}
+```
+
+**Par :**
+```python
+@app.get("/api/search-by-text")
+def search_by_text(query: str, k: int = 10, genre: str = None):
+    embedding = generate_text_embedding(query)
+    
+    # Nouveau : recherche Supabase
+    params = {
+        'query_embedding': embedding,
+        'match_count': k
+    }
+    if genre:
+        params['filter_genre'] = genre
+    
+    result = supabase.rpc('search_albums', params).execute()
+    
+    return {
+        "success": True,
+        "query_type": "text",
+        "results": result.data
+    }
+```
+
+---
+
+#### **C. Recherche par Image**
+
+**Même logique :**
+- Remplacer `index.search()` par `supabase.rpc('search_albums')`
+- Ajouter support du filtre `genre` optionnel
+
+---
+
+#### **D. Endpoint Genres (Nouveau)**
+
+**Ajouter :**
+```python
+@app.get("/api/genres")
+def get_genres():
+    """Liste des genres disponibles"""
+    result = supabase.table('album_covers')\
+        .select('genre')\
+        .execute()
+    
+    genres = list(set([row['genre'] for row in result.data if row['genre']]))
+    genres.sort()
+    
+    return {
+        "success": True,
+        "genres": genres
+    }
+```
+
+---
+
+### **5. Format de Réponse**
+
+**Ancien format FAISS :**
 ```json
 {
-  "success": true,
-  "query_type": "image",
-  "total_results": 10,
   "results": [
     {
-      "album_id": 4761,
-      "artist": "Pink Floyd",
-      "album_name": "Dark Side of the Moon",
-      "genre": "Rock",
-      "release_year": 1973,
-      "similarity_score": 0.953,
-      "pitchfork_score": 10.0,
-      "best_new_music": false,
-      "image_url": "/api/image/4761",
-      "cover_url_original": "https://..."
+      "album_id": 12345,
+      "genre_id": 8,
+      "similarity_score": 0.95
     }
   ]
 }
 ```
 
-**Gestion d'erreurs :**
-- 400 si pas une image
-- 413 si fichier trop gros (>10MB)
-- 500 si erreur processing
-
-#### **GET `/api/search-by-text`**
-**Paramètres :**
-- `query`: str (required) - texte de recherche
-- `k`: int (optionnel, default=10, max=50)
-
-**Processus :**
-1. Valider query non vide
-2. Générer embedding CLIP (text features)
-3. Normaliser L2
-4. Rechercher dans FAISS
-5. Récupérer et retourner métadonnées
-
-**Retour JSON :** Même format que search-by-image
-
-#### **GET `/api/image/{album_id}`**
-**Paramètres :**
-- `album_id`: int (path parameter)
-
-**Processus :**
-1. Valider que album_id existe dans métadonnées
-2. Construire chemin : `images/album_{album_id}.jpg`
-3. Vérifier que fichier existe
-4. Retourner image avec headers appropriés
-
-**Headers :**
-```
-Content-Type: image/jpeg
-Cache-Control: public, max-age=86400
-```
-
-**Erreurs :**
-- 404 si album_id invalide ou image manquante
-
-#### **GET `/api/stats`**
-Statistiques du dataset :
-- Nombre total d'albums
-- Distribution par genre (top 10)
-- Années couvertes (min/max)
-- Scores Pitchfork moyens
-
-### Fonctions utilitaires
-
-**`load_clip_model()`**
-- Charge modèle et processor
-- Met sur device approprié (CPU)
-- Retourne model, processor, device
-
-**`load_faiss_index(path)`**
-- Charge index depuis fichier
-- Vérifie intégrité
-- Retourne index
-
-**`load_metadata(path)`**
-- Charge JSON
-- Parse et valide structure
-- Retourne liste de dictionnaires
-
-**`get_album_by_local_id(local_id, metadata)`**
-- Recherche dans métadonnées par local_id
-- Retourne dict ou None
-
-### Configuration serveur
-
-```python
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=7860,  # Port standard HF Spaces
-        log_level="info"
-    )
+**Nouveau format Supabase :**
+```json
+{
+  "success": true,
+  "query_type": "text",
+  "results": [
+    {
+      "id": "585",
+      "artist": "Pink Floyd",
+      "album_name": "The Dark Side of the Moon",
+      "genre": "Rock",
+      "release_year": 1973,
+      "pitchfork_score": 10.0,
+      "cover_url": "https://...",
+      "similarity": 0.89
+    }
+  ]
+}
 ```
 
 ---
 
-## 📦 Fichier 2 : `requirements.txt`
+## 🎨 Avantages de la Migration
 
-```
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-python-multipart==0.0.9
-transformers==4.44.0
-torch==2.4.0
-faiss-cpu==1.8.0
-pillow==10.4.0
-numpy==1.26.0
-```
+### **Avant (FAISS) :**
+- ❌ Métadonnées séparées dans un fichier JSON
+- ❌ Pas de filtres (genre, année, etc.)
+- ❌ Pas de base de données relationnelle
+- ❌ Difficile à mettre à jour
 
-**Notes :**
-- `uvicorn[standard]` inclut les optimisations performance
-- `faiss-cpu` pour compatibilité HF Spaces gratuit
-- Versions spécifiques pour reproductibilité
+### **Après (Supabase) :**
+- ✅ Métadonnées structurées en SQL
+- ✅ Filtres puissants (genre, année, score)
+- ✅ Vraie base de données PostgreSQL
+- ✅ Facile à query et mettre à jour
+- ✅ API REST Supabase disponible
+- ✅ Scalable (millions de vecteurs)
 
 ---
 
-## 📖 Fichier 3 : `README.md`
+## 🚀 Checklist de Déploiement
 
-### Contenu à inclure
+### **Backend (HuggingFace Space) :**
+- [ ] Ajouter `supabase` dans `requirements.txt`
+- [ ] Ajouter secrets `SUPABASE_URL` et `SUPABASE_KEY`
+- [ ] Remplacer code FAISS par code Supabase dans `app.py`
+- [ ] Ajouter endpoint `/api/genres`
+- [ ] Tester les 3 endpoints : `/health`, `/api/search-by-text`, `/api/search-by-image`
 
-**Section 1 : Header**
-```markdown
-# 🎵 Shazam Visual - Album Cover Search Engine
+### **Frontend (Next.js) :**
+- [ ] Mettre à jour le format de réponse attendu
+- [ ] Ajouter dropdown filtre genre
+- [ ] Afficher métadonnées complètes (artist, album_name, score, year)
+- [ ] Gérer le nouveau champ `similarity` au lieu de `similarity_score`
 
-Visual similarity search for album covers using CLIP embeddings and FAISS indexing.
+---
 
-**Dataset:** 25,790 album covers from Pitchfork reviews (1999-2024)  
-**Model:** OpenAI CLIP ViT-B/32  
-**Index:** FAISS (Flat Inner Product)
-```
+## 📝 Notes Importantes
 
-**Section 2 : Features**
-- Search by uploading an album cover image
-- Search by text description
-- Fast similarity search (<100ms)
-- 25k+ albums indexed
+### **CLIP reste identique**
+- ✅ Même modèle : `openai/clip-vit-base-patch32`
+- ✅ Même dimension : 512
+- ✅ Même normalisation : L2 norm
 
-**Section 3 : API Endpoints**
+### **Ce qui change**
+- ❌ Plus de FAISS
+- ✅ Supabase RPC function
+- ✅ Métadonnées enrichies
+- ✅ Filtres par genre
 
-Documentation pour chaque endpoint avec :
-- Method + Path
-- Parameters
-- Example request (curl)
-- Example response
+### **Performance**
+- FAISS : ~10ms pour 20k vecteurs
+- Supabase (HNSW) : ~30-50ms pour 15k vecteurs
+- ✅ Largement suffisant pour une web app
 
-**Section 4 : Usage Examples**
+---
 
+## 🔗 Ressources
+
+- **Supabase Docs** : https://supabase.com/docs/guides/ai/vector-columns
+- **Backend actuel** : https://huggingface.co/spaces/[ton-space]
+- **Base de données** : 15,000 albums déjà indexés dans Supabase
+
+---
+
+## 💡 Instructions pour Claude Code
+
+**Prompt suggéré :**
+
+> "Migre mon backend FastAPI de FAISS vers Supabase.
+> 
+> **Contexte :**
+> - Backend sur HuggingFace Space
+> - Utilise CLIP pour générer embeddings
+> - Actuellement FAISS pour la recherche vectorielle
+> 
+> **Changements :**
+> - Remplacer FAISS par Supabase (PostgreSQL + pgvector)
+> - Utiliser la fonction RPC `search_albums(query_embedding, match_count, filter_genre)`
+> - Ajouter support filtre genre optionnel
+> - Ajouter endpoint `/api/genres`
+> - Mettre à jour format de réponse
+> 
+> **Credentials Supabase :**
+> - URL : [à fournir via secrets]
+> - Key : [à fournir via secrets]
+> 
+> **Structure Supabase :**
+> - Table : `album_covers`
+> - Colonnes : id, embedding(512), artist, album_name, genre, release_year, pitchfork_score, cover_url
+> - Fonction RPC : `search_albums` (déjà créée)
+> 
+> Conserve la même logique CLIP, change uniquement la partie recherche vectorielle."
+
+---
+
+## ✅ Résultat Attendu
+
+**API qui fonctionne avec :**
 ```bash
-# Search by image
-curl -X POST "https://your-space.hf.space/api/search-by-image" \
-  -F "file=@album_cover.jpg" \
-  -F "k=5"
+# Test recherche texte
+curl "https://your-space.hf.space/api/search-by-text?query=dark+album&k=5"
 
-# Search by text
-curl "https://your-space.hf.space/api/search-by-text?query=dark%20ambient&k=5"
+# Test recherche texte + filtre
+curl "https://your-space.hf.space/api/search-by-text?query=guitar&genre=Rock&k=10"
 
-# Get image
-curl "https://your-space.hf.space/api/image/4761" --output album.jpg
+# Test liste genres
+curl "https://your-space.hf.space/api/genres"
+
+# Test recherche image
+curl -X POST -F "file=@cover.jpg" "https://your-space.hf.space/api/search-by-image?k=5"
 ```
 
-**Section 5 : Technical Details**
-- Architecture overview
-- Model specifications
-- Dataset information
-- Performance metrics
-
-**Section 6 : Setup Instructions**
-
-Pour développement local :
-1. Clone repo
-2. Install dependencies
-3. Download models and images
-4. Run uvicorn
-
-**Section 7 : Limitations**
-- Text search works better for visual concepts (colors, objects) than narrative descriptions
-- Image-to-image search is more accurate than text-to-image
-- Dataset limited to Pitchfork-reviewed albums
-
-**Section 8 : Future Improvements**
-- Fine-tune CLIP on album covers
-- Add rate limiting
-- API authentication
-- More metadata filters
-
----
-
-## 🚫 Fichier 4 : `.gitignore`
-
+**Réponse attendue :**
+```json
+{
+  "success": true,
+  "results": [
+    {
+      "id": "585",
+      "artist": "Pink Floyd",
+      "album_name": "The Dark Side of the Moon",
+      "genre": "Rock",
+      "similarity": 0.89
+    }
+  ]
+}
 ```
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-
-# Models et données (trop lourds pour Git)
-models/*.index
-models/*.pkl
-models/*.npy
-images/*.jpg
-images/*.jpeg
-images/*.png
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-```
-
----
-
-## 📝 Fichier 5 : `models/README.txt`
-
-```
-MODELS DIRECTORY
-================
-
-This directory should contain:
-
-1. album_covers.index
-   - FAISS index file (~400 MB)
-   - Contains 25,790 CLIP embeddings (512D)
-   
-2. valid_metadata_final.json
-   - Metadata for all albums
-   - Includes artist, title, genre, year, scores
-   
-3. metadata.pkl (optional)
-   - Technical metadata
-   - Model info and dataset stats
-
-UPLOAD INSTRUCTIONS:
-- Download these files from Google Drive
-- Upload to this directory via HF Space interface
-- Or use Git LFS for large files
-
-FILES ARE NOT INCLUDED IN GIT DUE TO SIZE.
-```
-
----
-
-## 📝 Fichier 6 : `images/README.txt`
-
-```
-IMAGES DIRECTORY
-================
-
-This directory should contain 25,790 album cover images.
-
-Naming convention: album_{id}.jpg
-Example: album_0.jpg, album_1.jpg, ..., album_25789.jpg
-
-UPLOAD OPTIONS:
-
-Option A: Web Interface
-- Create a ZIP of all images
-- Upload via HF Space Files tab
-- Extract in Space terminal
-
-Option B: Git LFS
-- Configure Git LFS for *.jpg
-- Add and push images
-- WARNING: Very slow for 25k files
-
-Option C: Python Script
-- Use huggingface_hub API
-- Upload programmatically from Google Drive
-- Fastest for large batches
-
-TOTAL SIZE: ~8 GB
-FILES ARE NOT INCLUDED IN GIT DUE TO SIZE.
-```
-
----
-
-## ✅ Validation checklist
-
-Après génération, vérifier que :
-
-- [ ] `app.py` contient tous les endpoints spécifiés
-- [ ] CORS est configuré correctement
-- [ ] Gestion d'erreurs sur tous les endpoints
-- [ ] Logs informatifs au démarrage
-- [ ] `requirements.txt` contient toutes les dépendances nécessaires
-- [ ] README.md est complet et clair
-- [ ] `.gitignore` exclut les fichiers lourds
-- [ ] Placeholders dans `models/` et `images/`
-- [ ] Instructions claires pour upload manuel des fichiers
-
----
-
-## 🚀 Prochaines étapes (après génération)
-
-1. **Tester localement** (optionnel mais recommandé)
-   - Créer env virtuel
-   - Installer requirements
-   - Placer fichiers test dans models/
-   - Lancer `uvicorn app:app --reload`
-   - Tester endpoints avec curl ou Postman
-
-2. **Créer HF Space**
-   - Aller sur huggingface.co/new-space
-   - Nom : `shazam-visual` ou similaire
-   - SDK : Gradio (ou Docker si préféré)
-   - Visibility : Public (on mettra privé après)
-
-3. **Upload fichiers code**
-   - Via interface web : drag & drop tous les .py, .txt, .md
-   - Ou via Git : clone, add, commit, push
-
-4. **Upload fichiers lourds** (séparément)
-   - Models (album_covers.index, metadata JSON)
-   - Images (25,790 JPG)
-
-5. **Tester le Space**
-   - Vérifier que l'API démarre
-   - Tester /health
-   - Tester search endpoints
-   - Vérifier que images sont servies
-
-6. **Configuration finale**
-   - Ajuster settings si nécessaire
-   - Mettre en privé si souhaité
-   - Documenter l'URL du Space
-
----
-
-## 💡 Notes importantes
-
-**Performance :**
-- CLIP inference sur CPU : ~500ms par image
-- FAISS search : <10ms pour 25k vecteurs
-- Temps total par recherche : ~500-600ms
-
-**Limites HF Spaces gratuit :**
-- CPU only (pas de GPU nécessaire)
-- 16 GB RAM (suffisant)
-- 50 GB storage (on utilise ~9 GB)
-- Pas de timeout sur requests
-
-**Sécurité :**
-- Pas d'authentification pour MVP
-- Space sera mis en privé manuellement
-- À améliorer en production (API keys, rate limiting)
-
-**Évolutivité :**
-- Architecture prête pour scale
-- Peut migrer vers AWS plus tard
-- Code portable et bien structuré
-
----
-
-## 🎯 Objectif final
-
-Un dossier `hf-space-deploy/` complet et prêt à déployer, contenant :
-- ✅ Backend FastAPI fonctionnel
-- ✅ Documentation claire
-- ✅ Structure organisée
-- ✅ Instructions d'upload des fichiers lourds
-- ✅ Prêt pour tests locaux et déploiement HF
-
-**Le code doit être production-ready mais simple, sans over-engineering.**

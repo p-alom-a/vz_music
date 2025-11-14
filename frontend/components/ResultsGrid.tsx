@@ -16,13 +16,13 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {results.map((result, index) => (
           <div
-            key={result.album_id}
+            key={result.id}
             className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-xl transition-shadow bg-white"
           >
             {/* Album Cover Image */}
             <div className="relative w-full aspect-square bg-gray-100">
               <Image
-                src={result.cover_url_original}
+                src={result.cover_url}
                 alt={`${result.album_name} by ${result.artist}`}
                 fill
                 className="object-cover"
@@ -31,14 +31,8 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
               />
               {/* Similarity Badge */}
               <div className="absolute top-2 right-2 bg-green-600 text-white px-2 py-1 rounded-md text-sm font-semibold shadow-lg">
-                {(result.similarity_score * 100).toFixed(1)}%
+                {(result.similarity * 100).toFixed(1)}%
               </div>
-              {/* Best New Music Badge */}
-              {result.best_new_music && (
-                <div className="absolute top-2 left-2 bg-yellow-500 text-black px-2 py-1 rounded-md text-xs font-bold shadow-lg">
-                  BNM
-                </div>
-              )}
             </div>
 
             {/* Album Info */}
