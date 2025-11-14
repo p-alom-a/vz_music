@@ -4,13 +4,13 @@ from fastapi.responses import FileResponse
 from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 import torch
-import faiss
 import numpy as np
 import json
 import os
 import io
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
+from supabase import create_client, Client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,15 +36,16 @@ app.add_middleware(
 clip_model = None
 clip_processor = None
 device = None
-faiss_index = None
-metadata = None
+supabase: Optional[Client] = None
 
 # Constants
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 MAX_K = 50
-DEFAULT_K = 50
-MODELS_DIR = "models"
-IMAGES_DIR = "images"
+DEFAULT_K = 10
+
+# Supabase configuration (from environment variables)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 
 def load_clip_model():
@@ -59,63 +60,37 @@ def load_clip_model():
     return model, processor, dev
 
 
-def load_faiss_index(path: str):
-    """Load FAISS index from file"""
-    logger.info(f"Loading FAISS index from {path}...")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"FAISS index not found at {path}")
-    index = faiss.read_index(path)
-    logger.info(f"FAISS index loaded: {index.ntotal} vectors indexed")
-    return index
+def init_supabase() -> Client:
+    """Initialize Supabase client"""
+    logger.info("Initializing Supabase client...")
 
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 
-def load_metadata(path: str):
-    """Load metadata from JSON file"""
-    logger.info(f"Loading metadata from {path}...")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Metadata file not found at {path}")
-
-    with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    logger.info(f"Metadata loaded: {len(data)} albums")
-    return data
-
-
-def get_album_by_local_id(local_id: int, metadata_list: List[Dict]) -> Dict[str, Any]:
-    """Find album by local_id in metadata"""
-    for album in metadata_list:
-        if album.get("local_id") == local_id:
-            return album
-    return None
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    logger.info("Supabase client initialized successfully")
+    return client
 
 
 @app.on_event("startup")
 async def startup_event():
     """Load models and data at startup"""
-    global clip_model, clip_processor, device, faiss_index, metadata
+    global clip_model, clip_processor, device, supabase
 
     try:
         # Load CLIP model
         clip_model, clip_processor, device = load_clip_model()
 
-        # Load FAISS index
-        index_path = os.path.join(MODELS_DIR, "album_covers.index")
-        faiss_index = load_faiss_index(index_path)
+        # Initialize Supabase client
+        supabase = init_supabase()
 
-        # Load metadata
-        metadata_path = os.path.join(MODELS_DIR, "valid_metadata_final.json")
-        metadata = load_metadata(metadata_path)
-
-        # Verify integrity
-        if len(metadata) != faiss_index.ntotal:
-            logger.warning(
-                f"Mismatch: {len(metadata)} metadata entries vs {faiss_index.ntotal} FAISS vectors"
-            )
+        # Get album count from Supabase
+        count_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
+        total_albums = count_response.count if hasattr(count_response, 'count') else 0
 
         logger.info("=" * 60)
         logger.info("Shazam Visual API is ready!")
-        logger.info(f"Total albums indexed: {faiss_index.ntotal}")
+        logger.info(f"Total albums indexed: {total_albums}")
         logger.info(f"Device: {device}")
         logger.info("=" * 60)
 
@@ -127,14 +102,23 @@ async def startup_event():
 @app.get("/")
 def root():
     """API information endpoint"""
+    # Get total albums count
+    total_albums = 0
+    if supabase:
+        try:
+            count_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
+            total_albums = count_response.count if hasattr(count_response, 'count') else 0
+        except:
+            pass
+
     return {
         "message": "🎵 Shazam Visual - Album Cover Search Engine",
         "status": "running",
-        "total_albums": faiss_index.ntotal if faiss_index else 0,
+        "total_albums": total_albums,
         "endpoints": {
             "search_by_image": "POST /api/search-by-image",
             "search_by_text": "GET /api/search-by-text",
-            "get_image": "GET /api/image/{album_id}",
+            "get_genres": "GET /api/genres",
             "stats": "GET /api/stats",
             "health": "GET /health",
             "docs": "GET /docs"
@@ -152,9 +136,17 @@ def health():
     is_healthy = all([
         clip_model is not None,
         clip_processor is not None,
-        faiss_index is not None,
-        metadata is not None
+        supabase is not None
     ])
+
+    # Get total albums count
+    total_albums = 0
+    if supabase:
+        try:
+            count_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
+            total_albums = count_response.count if hasattr(count_response, 'count') else 0
+        except:
+            pass
 
     response_time = time.time() - start
 
@@ -162,22 +154,26 @@ def health():
         "status": "healthy" if is_healthy else "unhealthy",
         "models_loaded": {
             "clip": clip_model is not None,
-            "faiss": faiss_index is not None,
-            "metadata": metadata is not None
+            "supabase": supabase is not None
         },
-        "total_albums": faiss_index.ntotal if faiss_index else 0,
+        "total_albums": total_albums,
         "response_time_ms": round(response_time * 1000, 2)
     }
 
 
 @app.post("/api/search-by-image")
-async def search_by_image(file: UploadFile = File(...), k: int = DEFAULT_K):
+async def search_by_image(
+    file: UploadFile = File(...),
+    k: int = DEFAULT_K,
+    genre: Optional[str] = None
+):
     """
     Search for similar album covers by uploading an image.
 
     Parameters:
     - file: Image file (JPEG, PNG, etc.)
     - k: Number of results to return (default: 10, max: 50)
+    - genre: Optional genre filter (e.g., "Rock", "Electronic")
 
     Returns:
     - JSON with similar albums ranked by similarity
@@ -206,29 +202,35 @@ async def search_by_image(file: UploadFile = File(...), k: int = DEFAULT_K):
         with torch.no_grad():
             embedding = clip_model.get_image_features(**inputs).cpu().numpy()
 
-        # Normalize for cosine similarity
-        faiss.normalize_L2(embedding)
+        # Normalize for cosine similarity (L2 normalization)
+        embedding = embedding / np.linalg.norm(embedding)
 
-        # Search in FAISS
-        distances, indices = faiss_index.search(embedding, k)
+        # Convert numpy array to list for Supabase RPC
+        embedding_list = embedding[0].tolist()
+
+        # Search in Supabase using RPC function
+        params = {
+            'query_embedding': embedding_list,
+            'match_count': k
+        }
+        if genre:
+            params['filter_genre'] = genre
+
+        result = supabase.rpc('search_albums', params).execute()
 
         # Format results
         results = []
-        for idx, score in zip(indices[0], distances[0]):
-            album = get_album_by_local_id(int(idx), metadata)
-            if album:
-                results.append({
-                    "album_id": album["local_id"],
-                    "artist": album["artist"],
-                    "album_name": album["album_name"],
-                    "genre": album["genre"],
-                    "release_year": int(album["release_year"]) if album["release_year"] else None,
-                    "similarity_score": float(score),
-                    "pitchfork_score": float(album["score"]) if album["score"] else None,
-                    "best_new_music": bool(album["best_new_music"]),
-                    "image_url": f"/api/image/{album['local_id']}",
-                    "cover_url_original": album["cover_url"]
-                })
+        for album in result.data:
+            results.append({
+                "id": album["id"],
+                "artist": album.get("artist"),
+                "album_name": album.get("album_name"),
+                "genre": album.get("genre"),
+                "release_year": album.get("release_year"),
+                "similarity": float(album.get("similarity", 0)),
+                "pitchfork_score": float(album["pitchfork_score"]) if album.get("pitchfork_score") else None,
+                "cover_url": album.get("cover_url")
+            })
 
         return {
             "success": True,
@@ -245,13 +247,18 @@ async def search_by_image(file: UploadFile = File(...), k: int = DEFAULT_K):
 
 
 @app.get("/api/search-by-text")
-async def search_by_text(query: str, k: int = DEFAULT_K):
+async def search_by_text(
+    query: str,
+    k: int = DEFAULT_K,
+    genre: Optional[str] = None
+):
     """
     Search for album covers by text description.
 
     Parameters:
     - query: Text description (e.g., "dark ambient music", "red album cover")
     - k: Number of results to return (default: 10, max: 50)
+    - genre: Optional genre filter (e.g., "Rock", "Electronic")
 
     Returns:
     - JSON with similar albums ranked by similarity
@@ -265,36 +272,42 @@ async def search_by_text(query: str, k: int = DEFAULT_K):
         raise HTTPException(400, f"k must be between 1 and {MAX_K}")
 
     try:
-        logger.info(f"Text search query: '{query}' (k={k})")
+        logger.info(f"Text search query: '{query}' (k={k}, genre={genre})")
 
         # Generate CLIP text embedding
         inputs = clip_processor(text=query, return_tensors="pt").to(device)
         with torch.no_grad():
             embedding = clip_model.get_text_features(**inputs).cpu().numpy()
 
-        # Normalize for cosine similarity
-        faiss.normalize_L2(embedding)
+        # Normalize for cosine similarity (L2 normalization)
+        embedding = embedding / np.linalg.norm(embedding)
 
-        # Search in FAISS
-        distances, indices = faiss_index.search(embedding, k)
+        # Convert numpy array to list for Supabase RPC
+        embedding_list = embedding[0].tolist()
+
+        # Search in Supabase using RPC function
+        params = {
+            'query_embedding': embedding_list,
+            'match_count': k
+        }
+        if genre:
+            params['filter_genre'] = genre
+
+        result = supabase.rpc('search_albums', params).execute()
 
         # Format results
         results = []
-        for idx, score in zip(indices[0], distances[0]):
-            album = get_album_by_local_id(int(idx), metadata)
-            if album:
-                results.append({
-                    "album_id": album["local_id"],
-                    "artist": album["artist"],
-                    "album_name": album["album_name"],
-                    "genre": album["genre"],
-                    "release_year": int(album["release_year"]) if album["release_year"] else None,
-                    "similarity_score": float(score),
-                    "pitchfork_score": float(album["score"]) if album["score"] else None,
-                    "best_new_music": bool(album["best_new_music"]),
-                    "image_url": f"/api/image/{album['local_id']}",
-                    "cover_url_original": album["cover_url"]
-                })
+        for album in result.data:
+            results.append({
+                "id": album["id"],
+                "artist": album.get("artist"),
+                "album_name": album.get("album_name"),
+                "genre": album.get("genre"),
+                "release_year": album.get("release_year"),
+                "similarity": float(album.get("similarity", 0)),
+                "pitchfork_score": float(album["pitchfork_score"]) if album.get("pitchfork_score") else None,
+                "cover_url": album.get("cover_url")
+            })
 
         logger.info(f"Found {len(results)} results for '{query}'")
 
@@ -313,37 +326,37 @@ async def search_by_text(query: str, k: int = DEFAULT_K):
         raise HTTPException(500, f"Search failed: {str(e)}")
 
 
-@app.get("/api/image/{album_id}")
-async def get_image(album_id: int):
+@app.get("/api/genres")
+async def get_genres():
     """
-    Get album cover image by album ID.
-
-    Parameters:
-    - album_id: Local ID of the album
+    Get list of available genres in the database.
 
     Returns:
-    - JPEG image file
+    - JSON with list of genres sorted alphabetically
     """
-    # Validate album exists in metadata
-    album = get_album_by_local_id(album_id, metadata)
-    if not album:
-        raise HTTPException(404, f"Album with ID {album_id} not found")
+    try:
+        logger.info("Fetching genres from Supabase...")
 
-    # Construct image path
-    image_path = os.path.join(IMAGES_DIR, f"album_{album_id}.jpg")
+        # Query all unique genres from the album_covers table
+        result = supabase.table('album_covers')\
+            .select('genre')\
+            .execute()
 
-    # Check if file exists
-    if not os.path.exists(image_path):
-        raise HTTPException(404, f"Image file not found for album {album_id}")
+        # Extract unique genres and filter out None/empty values
+        genres = list(set([row['genre'] for row in result.data if row.get('genre')]))
+        genres.sort()
 
-    # Return image with appropriate headers
-    return FileResponse(
-        image_path,
-        media_type="image/jpeg",
-        headers={
-            "Cache-Control": "public, max-age=86400"  # Cache for 24 hours
+        logger.info(f"Found {len(genres)} unique genres")
+
+        return {
+            "success": True,
+            "total_genres": len(genres),
+            "genres": genres
         }
-    )
+
+    except Exception as e:
+        logger.error(f"Failed to fetch genres: {e}")
+        raise HTTPException(500, f"Failed to fetch genres: {str(e)}")
 
 
 @app.get("/api/stats")
@@ -357,17 +370,25 @@ async def get_stats():
     - Year range
     - Average Pitchfork scores
     """
-    if not metadata:
-        raise HTTPException(500, "Metadata not loaded")
+    if not supabase:
+        raise HTTPException(500, "Supabase client not initialized")
 
     try:
+        # Get all albums data for statistics
+        result = supabase.table('album_covers')\
+            .select('genre, release_year, pitchfork_score, best_new_music')\
+            .execute()
+
+        albums = result.data
+        total_albums = len(albums)
+
         # Count genres
         genre_counts = {}
         years = []
         scores = []
         bnm_count = 0
 
-        for album in metadata:
+        for album in albums:
             # Genre distribution
             genre = album.get("genre", "Unknown")
             genre_counts[genre] = genre_counts.get(genre, 0) + 1
@@ -378,7 +399,7 @@ async def get_stats():
                 years.append(int(year))
 
             # Scores
-            score = album.get("score")
+            score = album.get("pitchfork_score")
             if score:
                 scores.append(float(score))
 
@@ -390,8 +411,7 @@ async def get_stats():
         top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
         return {
-            "total_albums": len(metadata),
-            "total_indexed": faiss_index.ntotal if faiss_index else 0,
+            "total_albums": total_albums,
             "top_genres": [{"genre": g, "count": c} for g, c in top_genres],
             "year_range": {
                 "min": min(years) if years else None,
