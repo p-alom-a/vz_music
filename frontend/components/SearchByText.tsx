@@ -23,8 +23,10 @@ export default function SearchByText() {
     setError(null);
 
     try {
-      const response = await searchByText(query, 10);
-      setResults(response.results);
+      const response = await searchByText(query, 30);
+      // Filter results to show only those with good similarity (>15%)
+      const filteredResults = response.results.filter(result => result.similarity > 0.15);
+      setResults(filteredResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
