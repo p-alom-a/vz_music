@@ -29,10 +29,6 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                 priority={index < 4}
               />
-              {/* Similarity Badge */}
-              <div className="absolute top-2 right-2 bg-green-600 text-white px-2 py-1 rounded-md text-sm font-semibold shadow-lg">
-                {(result.similarity * 100).toFixed(1)}%
-              </div>
             </div>
 
             {/* Album Info */}
@@ -70,18 +66,6 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
                   </div>
                 )}
               </div>
-
-              {/* Pitchfork Score */}
-              {result.pitchfork_score && (
-                <div className="pt-2 border-t border-gray-100">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Pitchfork Score</span>
-                    <span className="text-sm font-bold text-blue-600">
-                      {result.pitchfork_score.toFixed(1)} / 10
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         ))}
