@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from transformers import CLIPModel, CLIPProcessor
+from sentence_transformers import SentenceTransformer
 from PIL import Image
 import torch
 import numpy as np
@@ -35,6 +36,7 @@ app.add_middleware(
 # Global variables for loaded models and data
 clip_model = None
 clip_processor = None
+vlm_model = None
 device = None
 supabase: Optional[Client] = None
 
@@ -60,6 +62,14 @@ def load_clip_model():
     return model, processor, dev
 
 
+def load_vlm_model():
+    """Load VLM text embedding model for semantic search"""
+    logger.info("Loading VLM model (sentence-transformers/all-MiniLM-L6-v2)...")
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    logger.info(f"VLM model loaded successfully (embedding dim: 384)")
+    return model
+
+
 def init_supabase() -> Client:
     """Initialize Supabase client"""
     logger.info("Initializing Supabase client...")
@@ -75,11 +85,14 @@ def init_supabase() -> Client:
 @app.on_event("startup")
 async def startup_event():
     """Load models and data at startup"""
-    global clip_model, clip_processor, device, supabase
+    global clip_model, clip_processor, vlm_model, device, supabase
 
     try:
         # Load CLIP model
         clip_model, clip_processor, device = load_clip_model()
+
+        # Load VLM model
+        vlm_model = load_vlm_model()
 
         # Initialize Supabase client
         supabase = init_supabase()
@@ -88,9 +101,14 @@ async def startup_event():
         count_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
         total_albums = count_response.count if hasattr(count_response, 'count') else 0
 
+        # Get VLM count from Supabase
+        vlm_response = supabase.table('album_covers').select('id', count='exact').eq('vlm_processed', True).execute()
+        vlm_albums = vlm_response.count if hasattr(vlm_response, 'count') else 0
+
         logger.info("=" * 60)
-        logger.info("Shazam Visual API is ready!")
+        logger.info("SpotIt API is ready!")
         logger.info(f"Total albums indexed: {total_albums}")
+        logger.info(f"VLM albums: {vlm_albums} ({vlm_albums/total_albums*100:.1f}%)" if total_albums > 0 else "VLM albums: 0")
         logger.info(f"Device: {device}")
         logger.info("=" * 60)
 
@@ -428,6 +446,127 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Failed to compute stats: {e}")
         raise HTTPException(500, f"Failed to compute statistics: {str(e)}")
+
+
+@app.get("/api/search-vlm")
+async def search_by_vlm(
+    query: str,
+    k: int = DEFAULT_K,
+    min_similarity: float = 0.0,
+    filter_warnings: bool = False,
+    genre: Optional[str] = None
+):
+    """
+    Search for album covers using VLM (Vision-Language Model) semantic text search.
+    Searches through album cover descriptions for semantic matches.
+
+    Parameters:
+    - query: Text query (e.g., "minimalist album cover with bold typography")
+    - k: Number of results to return (default: 10, max: 50)
+    - min_similarity: Minimum similarity threshold 0-1 (default: 0.0)
+    - filter_warnings: Exclude albums with VLM warnings (default: False)
+    - genre: Optional genre filter
+
+    Returns:
+    - JSON with VLM search results including descriptions
+    """
+    if not vlm_model:
+        raise HTTPException(503, "VLM model not loaded")
+
+    if not query or len(query.strip()) == 0:
+        raise HTTPException(400, "Query cannot be empty")
+
+    if k < 1 or k > MAX_K:
+        raise HTTPException(400, f"k must be between 1 and {MAX_K}")
+
+    try:
+        logger.info(f"VLM search query: '{query}' (k={k}, genre={genre})")
+
+        # Generate VLM text embedding
+        embedding = vlm_model.encode(query, convert_to_numpy=True)
+        embedding_list = embedding.tolist()
+
+        # Search in Supabase using VLM RPC function
+        params = {
+            'query_embedding': embedding_list,
+            'match_count': k,
+            'filter_warnings': filter_warnings
+        }
+        if genre:
+            params['filter_genre'] = genre
+
+        result = supabase.rpc('search_albums_vlm', params).execute()
+
+        # Format results
+        results = []
+        for album in result.data:
+            similarity = float(album.get("similarity", 0))
+            if similarity >= min_similarity:
+                results.append({
+                    "id": album["id"],
+                    "artist": album.get("artist"),
+                    "album_name": album.get("album_name"),
+                    "genre": album.get("genre"),
+                    "release_year": album.get("release_year"),
+                    "similarity": similarity,
+                    "pitchfork_score": float(album["pitchfork_score"]) if album.get("pitchfork_score") else None,
+                    "cover_url": album.get("cover_url"),
+                    "vlm_description": album.get("vlm_description"),
+                    "vlm_warning": album.get("vlm_warning")
+                })
+
+        logger.info(f"Found {len(results)} VLM results for '{query}'")
+
+        return {
+            "success": True,
+            "mode": "vlm",
+            "query_type": "text",
+            "query": query,
+            "total_found": len(results),
+            "results": results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"VLM search failed: {e}")
+        raise HTTPException(500, f"VLM search failed: {str(e)}")
+
+
+@app.get("/api/vlm-stats")
+async def get_vlm_stats():
+    """
+    Get VLM coverage statistics.
+
+    Returns:
+    - total_albums: Total number of albums in database
+    - vlm_albums: Number of albums with VLM descriptions
+    - vlm_percentage: Percentage of albums with VLM data
+    """
+    if not supabase:
+        raise HTTPException(500, "Supabase client not initialized")
+
+    try:
+        # Count total albums
+        total_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
+        total_albums = total_response.count if hasattr(total_response, 'count') else 0
+
+        # Count VLM-processed albums
+        vlm_response = supabase.table('album_covers').select('id', count='exact').eq('vlm_processed', True).execute()
+        vlm_albums = vlm_response.count if hasattr(vlm_response, 'count') else 0
+
+        percentage = (vlm_albums / total_albums * 100) if total_albums > 0 else 0
+
+        return {
+            "success": True,
+            "total_albums": total_albums,
+            "vlm_albums": vlm_albums,
+            "vlm_percentage": round(percentage, 2)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch VLM stats: {e}")
+        raise HTTPException(500, f"Failed to fetch VLM stats: {str(e)}")
 
 
 if __name__ == "__main__":
