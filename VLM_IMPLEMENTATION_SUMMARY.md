@@ -5,8 +5,8 @@
 ### Backend (`app.py`)
 
 1. **Ajout de sentence-transformers**
-   - Modèle: `sentence-transformers/all-MiniLM-L6-v2`
-   - Génère des embeddings 384D pour le texte
+   - Modèle: `BAAI/bge-base-en-v1.5`
+   - Génère des embeddings 768D pour le texte
    - Chargé au startup avec CLIP
 
 2. **Nouveau endpoint `/api/search-vlm`**

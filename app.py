@@ -64,9 +64,9 @@ def load_clip_model():
 
 def load_vlm_model():
     """Load VLM text embedding model for semantic search"""
-    logger.info("Loading VLM model (sentence-transformers/all-MiniLM-L6-v2)...")
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    logger.info(f"VLM model loaded successfully (embedding dim: 384)")
+    logger.info("Loading VLM model (BAAI/bge-base-en-v1.5)...")
+    model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+    logger.info(f"VLM model loaded successfully (embedding dim: 768)")
     return model
 
 

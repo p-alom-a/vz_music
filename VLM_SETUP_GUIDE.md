@@ -9,7 +9,7 @@ This guide will help you set up the VLM (Vision-Language Model) semantic search 
 ### What Was Implemented
 
 ✅ **Backend:**
-- New VLM search engine class using `sentence-transformers/all-MiniLM-L6-v2`
+- New VLM search engine class using `BAAI/bge-base-en-v1.5`
 - `/api/search-vlm` endpoint for semantic text search
 - `/api/vlm-stats` endpoint to show VLM coverage
 - Supabase integration for vector similarity search
@@ -112,9 +112,9 @@ uvicorn main:app --reload --port 8000
 You should see:
 ```
 🚀 Loading CLIP model...
-🚀 Loading VLM text embedding model: sentence-transformers/all-MiniLM-L6-v2...
+🚀 Loading VLM text embedding model: BAAI/bge-base-en-v1.5...
 🔌 Connecting to Supabase...
-✅ VLM Search Engine ready! Embedding dimension: 384
+✅ VLM Search Engine ready! Embedding dimension: 768
 ✅ VLM search engine initialized
 ```
 
