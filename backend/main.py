@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
+import os
 from utils.search import AlbumSearchEngine
 
 # Initialize FastAPI
@@ -32,6 +33,8 @@ search_engine = None
 @app.on_event("startup")
 async def startup_event():
     global search_engine
+
+    # Initialize CLIP-based search engine
     search_engine = AlbumSearchEngine(
         index_path="models/album_covers.index",
         metadata_path="models/metadata.pkl"
@@ -41,7 +44,7 @@ async def startup_event():
 @app.get("/")
 def root():
     return {
-        "message": "🎵 Shazam Visual API",
+        "message": "🎵 SpotIt API",
         "status": "running",
         "endpoints": {
             "search_image": "/api/search-by-image",
