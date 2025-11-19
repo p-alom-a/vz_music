@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Shazam Visual - Album Cover Search',
+  title: 'vzMusic - Albumcoverscope',
   description: 'Search for album covers using images or text descriptions powered by CLIP and FAISS',
 };
 
