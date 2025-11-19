@@ -68,8 +68,8 @@ export default function SearchByText() {
         selectedMinYear,
         selectedMaxYear
       );
-      // Filter results to show only those with good similarity (>15%)
-      const filteredResults = response.results.filter(result => result.similarity > 0.15);
+      // Filter results to show only those with good similarity (>10%)
+      const filteredResults = response.results.filter(result => result.similarity > 0.10);
       setResults(filteredResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
