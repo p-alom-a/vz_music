@@ -119,6 +119,7 @@ def root():
             "search_by_image": "POST /api/search-by-image",
             "search_by_text": "GET /api/search-by-text",
             "get_genres": "GET /api/genres",
+            "get_year_range": "GET /api/year-range",
             "stats": "GET /api/stats",
             "health": "GET /health",
             "docs": "GET /docs"
@@ -165,7 +166,9 @@ def health():
 async def search_by_image(
     file: UploadFile = File(...),
     k: int = DEFAULT_K,
-    genre: Optional[str] = None
+    genre: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None
 ):
     """
     Search for similar album covers by uploading an image.
@@ -174,6 +177,8 @@ async def search_by_image(
     - file: Image file (JPEG, PNG, etc.)
     - k: Number of results to return (default: 10, max: 50)
     - genre: Optional genre filter (e.g., "Rock", "Electronic")
+    - year_min: Optional minimum release year filter
+    - year_max: Optional maximum release year filter
 
     Returns:
     - JSON with similar albums ranked by similarity
@@ -215,6 +220,10 @@ async def search_by_image(
         }
         if genre:
             params['filter_genre'] = genre
+        if year_min is not None:
+            params['filter_year_min'] = year_min
+        if year_max is not None:
+            params['filter_year_max'] = year_max
 
         result = supabase.rpc('search_albums', params).execute()
 
@@ -250,7 +259,9 @@ async def search_by_image(
 async def search_by_text(
     query: str,
     k: int = DEFAULT_K,
-    genre: Optional[str] = None
+    genre: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None
 ):
     """
     Search for album covers by text description.
@@ -259,6 +270,8 @@ async def search_by_text(
     - query: Text description (e.g., "dark ambient music", "red album cover")
     - k: Number of results to return (default: 10, max: 50)
     - genre: Optional genre filter (e.g., "Rock", "Electronic")
+    - year_min: Optional minimum release year filter
+    - year_max: Optional maximum release year filter
 
     Returns:
     - JSON with similar albums ranked by similarity
@@ -292,6 +305,10 @@ async def search_by_text(
         }
         if genre:
             params['filter_genre'] = genre
+        if year_min is not None:
+            params['filter_year_min'] = year_min
+        if year_max is not None:
+            params['filter_year_max'] = year_max
 
         result = supabase.rpc('search_albums', params).execute()
 
@@ -357,6 +374,51 @@ async def get_genres():
     except Exception as e:
         logger.error(f"Failed to fetch genres: {e}")
         raise HTTPException(500, f"Failed to fetch genres: {str(e)}")
+
+
+@app.get("/api/year-range")
+async def get_year_range():
+    """
+    Get the minimum and maximum release years available in the database.
+
+    Returns:
+    - JSON with min_year and max_year
+    """
+    if not supabase:
+        raise HTTPException(500, "Supabase client not initialized")
+
+    try:
+        logger.info("Fetching year range from Supabase...")
+
+        # Query all release years from the album_covers table
+        result = supabase.table('album_covers')\
+            .select('release_year')\
+            .execute()
+
+        # Extract years and filter out None values
+        years = [row['release_year'] for row in result.data if row.get('release_year') is not None]
+
+        if not years:
+            return {
+                "success": True,
+                "min_year": None,
+                "max_year": None
+            }
+
+        min_year = min(years)
+        max_year = max(years)
+
+        logger.info(f"Year range: {min_year} - {max_year}")
+
+        return {
+            "success": True,
+            "min_year": min_year,
+            "max_year": max_year
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch year range: {e}")
+        raise HTTPException(500, f"Failed to fetch year range: {str(e)}")
 
 
 @app.get("/api/stats")

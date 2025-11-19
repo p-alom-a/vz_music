@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { searchByText, getGenres } from '@/lib/api';
+import { searchByText, getGenres, getYearRange } from '@/lib/api';
 import { SearchResult } from '@/types';
 import ResultsGrid from './ResultsGrid';
+import YearRangeFilter from './YearRangeFilter';
 
 export default function SearchByText() {
   const [query, setQuery] = useState('');
@@ -13,19 +14,40 @@ export default function SearchByText() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load genres on component mount
+  // Year range state
+  const [minYear, setMinYear] = useState<number>(1960);
+  const [maxYear, setMaxYear] = useState<number>(2024);
+  const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
+  const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2024);
+
+  // Load genres and year range on component mount
   useEffect(() => {
-    const loadGenres = async () => {
+    const loadFilters = async () => {
       try {
-        const genreList = await getGenres();
+        const [genreList, yearRange] = await Promise.all([
+          getGenres(),
+          getYearRange(),
+        ]);
         setGenres(genreList);
+
+        if (yearRange.min_year && yearRange.max_year) {
+          setMinYear(yearRange.min_year);
+          setMaxYear(yearRange.max_year);
+          setSelectedMinYear(yearRange.min_year);
+          setSelectedMaxYear(yearRange.max_year);
+        }
       } catch (err) {
-        console.error('Failed to load genres:', err);
+        console.error('Failed to load filters:', err);
       }
     };
 
-    loadGenres();
+    loadFilters();
   }, []);
+
+  const handleYearChange = (min: number, max: number) => {
+    setSelectedMinYear(min);
+    setSelectedMaxYear(max);
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +63,10 @@ export default function SearchByText() {
     try {
       const response = await searchByText(
         query,
-        50,
-        selectedGenre || undefined
+        1000,
+        selectedGenre || undefined,
+        selectedMinYear,
+        selectedMaxYear
       );
       // Filter results to show only those with good similarity (>15%)
       const filteredResults = response.results.filter(result => result.similarity > 0.15);
@@ -92,6 +116,15 @@ export default function SearchByText() {
             ))}
           </select>
         </div>
+
+        <YearRangeFilter
+          minYear={minYear}
+          maxYear={maxYear}
+          selectedMinYear={selectedMinYear}
+          selectedMaxYear={selectedMaxYear}
+          onYearChange={handleYearChange}
+          disabled={loading}
+        />
 
         <button
           type="submit"
