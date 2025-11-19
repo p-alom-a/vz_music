@@ -227,7 +227,9 @@ async def search_by_image(
         if year_max is not None:
             params['filter_year_max'] = year_max
 
-        result = supabase.rpc('search_albums', params).execute()
+        # Execute RPC with explicit count hint to avoid PostgREST limits
+        # PostgREST may limit results, so we use limit() to ensure we get all rows
+        result = supabase.rpc('search_albums', params).limit(k).execute()
 
         logger.info(f"[IMAGE SEARCH] Supabase returned {len(result.data)} results (requested k={k})")
 
@@ -318,7 +320,9 @@ async def search_by_text(
         if year_max is not None:
             params['filter_year_max'] = year_max
 
-        result = supabase.rpc('search_albums', params).execute()
+        # Execute RPC with explicit count hint to avoid PostgREST limits
+        # PostgREST may limit results, so we use limit() to ensure we get all rows
+        result = supabase.rpc('search_albums', params).limit(k).execute()
 
         logger.info(f"[TEXT SEARCH] Supabase returned {len(result.data)} results (requested k={k})")
 
