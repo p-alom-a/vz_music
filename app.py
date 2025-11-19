@@ -449,7 +449,7 @@ async def get_stats():
     try:
         # Get all albums data for statistics
         result = supabase.table('album_covers')\
-            .select('genre, release_year, pitchfork_score, best_new_music')\
+            .select('genre, release_year, pitchfork_score')\
             .execute()
 
         albums = result.data
@@ -459,7 +459,6 @@ async def get_stats():
         genre_counts = {}
         years = []
         scores = []
-        bnm_count = 0
 
         for album in albums:
             # Genre distribution
@@ -476,10 +475,6 @@ async def get_stats():
             if score:
                 scores.append(float(score))
 
-            # Best New Music count
-            if album.get("best_new_music"):
-                bnm_count += 1
-
         # Top 10 genres
         top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -493,8 +488,7 @@ async def get_stats():
             "pitchfork_scores": {
                 "average": round(sum(scores) / len(scores), 2) if scores else None,
                 "min": round(min(scores), 1) if scores else None,
-                "max": round(max(scores), 1) if scores else None,
-                "best_new_music_count": bnm_count
+                "max": round(max(scores), 1) if scores else None
             }
         }
 

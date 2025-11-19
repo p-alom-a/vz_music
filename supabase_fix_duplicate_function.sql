@@ -24,7 +24,6 @@ RETURNS TABLE (
   genre text,
   release_year integer,
   pitchfork_score numeric,
-  best_new_music boolean,
   cover_url text,
   similarity double precision
 )
@@ -39,7 +38,6 @@ BEGIN
     album_covers.genre,
     album_covers.release_year,
     album_covers.pitchfork_score,
-    album_covers.best_new_music,
     album_covers.cover_url,
     1 - (album_covers.embedding <=> query_embedding) as similarity
   FROM album_covers
