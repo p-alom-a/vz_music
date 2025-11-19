@@ -23,6 +23,9 @@ export default function SearchByImage() {
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
   const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2024);
 
+  // Results count state
+  const [resultsCount, setResultsCount] = useState<number>(50);
+
   // Load genres and year range on component mount
   useEffect(() => {
     const loadFilters = async () => {
@@ -87,7 +90,7 @@ export default function SearchByImage() {
     try {
       const response = await searchByImage(
         file,
-        50,
+        resultsCount,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear
@@ -157,6 +160,26 @@ export default function SearchByImage() {
           onYearChange={handleYearChange}
           disabled={loading}
         />
+
+        <div>
+          <label htmlFor="results-count-image" className="block text-sm font-medium text-gray-700 mb-2">
+            Nombre de résultats: {resultsCount}
+          </label>
+          <input
+            id="results-count-image"
+            type="range"
+            min="10"
+            max="500"
+            value={resultsCount}
+            onChange={(e) => setResultsCount(Number(e.target.value))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            disabled={loading}
+          />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>10</span>
+            <span>500</span>
+          </div>
+        </div>
 
         <button
           type="submit"

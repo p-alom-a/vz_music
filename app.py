@@ -40,8 +40,8 @@ supabase: Optional[Client] = None
 
 # Constants
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-MAX_K = 50
-DEFAULT_K = 10
+MAX_K = 500
+DEFAULT_K = 50
 
 # Supabase configuration (from environment variables)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
