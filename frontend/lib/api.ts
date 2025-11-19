@@ -1,4 +1,4 @@
-import { SearchResponse, VLMStats } from '@/types';
+import { SearchResponse } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -44,38 +44,6 @@ export async function searchByImage(file: File, k: number = 5): Promise<SearchRe
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Search failed');
-  }
-
-  return response.json();
-}
-
-export async function searchByVLM(
-  query: string,
-  k: number = 10,
-  minSimilarity: number = 0.0,
-  filterWarnings: boolean = false,
-  genre?: string
-): Promise<SearchResponse> {
-  let url = `${API_BASE_URL}/api/search-vlm?query=${encodeURIComponent(query)}&k=${k}&min_similarity=${minSimilarity}&filter_warnings=${filterWarnings}`;
-  if (genre) {
-    url += `&genre=${encodeURIComponent(genre)}`;
-  }
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'VLM search failed');
-  }
-
-  return response.json();
-}
-
-export async function getVLMStats(): Promise<VLMStats> {
-  const response = await fetch(`${API_BASE_URL}/api/vlm-stats`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch VLM stats');
   }
 
   return response.json();

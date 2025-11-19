@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important: Git Remotes
+
+**This project has TWO git remotes:**
+- `origin`: https://github.com/p-alom-a/vz_music.git (GitHub backup)
+- `hf`: https://huggingface.co/spaces/pepouze5/vz_music (HuggingFace Space - PRODUCTION)
+
+**CRITICAL: When pushing changes, ALWAYS push to BOTH remotes:**
+```bash
+git push origin main  # Push to GitHub
+git push hf main      # Push to HuggingFace (triggers deployment)
+```
+
+**Only pushing to `origin` will NOT deploy to HuggingFace Space!**
+
 ## Project Overview
 
 Visual search backend API for album covers (similar to "Shazam for images"). The system uses CLIP embeddings and Supabase (PostgreSQL + pgvector) for similarity search across 15,000+ album covers.
