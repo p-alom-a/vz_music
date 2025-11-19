@@ -63,7 +63,7 @@ export default function SearchByText() {
     try {
       const response = await searchByText(
         query,
-        1000,
+        50,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear

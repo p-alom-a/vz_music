@@ -87,7 +87,7 @@ export default function SearchByImage() {
     try {
       const response = await searchByImage(
         file,
-        1000,
+        50,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear
