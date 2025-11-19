@@ -187,6 +187,8 @@ async def search_by_image(
     if k < 1 or k > MAX_K:
         raise HTTPException(400, f"k must be between 1 and {MAX_K}")
 
+    logger.info(f"[IMAGE SEARCH] Requested k={k}, genre={genre}, year_min={year_min}, year_max={year_max}")
+
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "File must be an image")
@@ -227,6 +229,8 @@ async def search_by_image(
 
         result = supabase.rpc('search_albums', params).execute()
 
+        logger.info(f"[IMAGE SEARCH] Supabase returned {len(result.data)} results (requested k={k})")
+
         # Format results
         results = []
         for album in result.data:
@@ -240,6 +244,8 @@ async def search_by_image(
                 "pitchfork_score": float(album["pitchfork_score"]) if album.get("pitchfork_score") else None,
                 "cover_url": album.get("cover_url")
             })
+
+        logger.info(f"[IMAGE SEARCH] Returning {len(results)} results to frontend")
 
         return {
             "success": True,
@@ -284,6 +290,8 @@ async def search_by_text(
     if k < 1 or k > MAX_K:
         raise HTTPException(400, f"k must be between 1 and {MAX_K}")
 
+    logger.info(f"[TEXT SEARCH] Requested k={k}, genre={genre}, year_min={year_min}, year_max={year_max}")
+
     try:
         logger.info(f"Text search query: '{query}' (k={k}, genre={genre})")
 
@@ -312,6 +320,8 @@ async def search_by_text(
 
         result = supabase.rpc('search_albums', params).execute()
 
+        logger.info(f"[TEXT SEARCH] Supabase returned {len(result.data)} results (requested k={k})")
+
         # Format results
         results = []
         for album in result.data:
@@ -326,6 +336,7 @@ async def search_by_text(
                 "cover_url": album.get("cover_url")
             })
 
+        logger.info(f"[TEXT SEARCH] Returning {len(results)} results to frontend")
         logger.info(f"Found {len(results)} results for '{query}'")
 
         return {
