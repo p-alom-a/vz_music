@@ -25,6 +25,9 @@ export default function SearchByImage() {
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
   const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2024);
 
+  // Results count state
+  const [resultsCount, setResultsCount] = useState<number>(200);
+
   // Load genres and year range on component mount
   useEffect(() => {
     const loadFilters = async () => {
@@ -87,10 +90,10 @@ export default function SearchByImage() {
     setError(null);
 
     try {
-      // Fetch 200 results from backend
+      // Fetch results from backend
       const response = await searchByImage(
         file,
-        200,
+        resultsCount,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear
