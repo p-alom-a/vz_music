@@ -18,7 +18,7 @@ export default function SearchByText() {
   const [showFilters, setShowFilters] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
-  // Year range state
+  // Year range state/
   const [minYear, setMinYear] = useState<number>(1960);
   const [maxYear, setMaxYear] = useState<number>(2024);
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
