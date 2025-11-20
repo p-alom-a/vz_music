@@ -11,18 +11,18 @@ export default function SearchByText() {
   const [query, setQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('');
   const [genres, setGenres] = useState<string[]>([]);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [allResults, setAllResults] = useState<SearchResult[]>([]); // All results from backend
+  const [displayedResults, setDisplayedResults] = useState<SearchResult[]>([]); // Currently displayed
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   // Year range state
   const [minYear, setMinYear] = useState<number>(1960);
   const [maxYear, setMaxYear] = useState<number>(2024);
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
   const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2024);
-
-  const [resultsCount, setResultsCount] = useState<number>(50);
 
   useEffect(() => {
     const loadFilters = async () => {
@@ -60,21 +60,41 @@ export default function SearchByText() {
     setError(null);
 
     try {
+      // Fetch 200 results from backend
       const response = await searchByText(
         query,
-        resultsCount,
+        200,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear
       );
-      const filteredResults = response.results.filter(result => result.similarity > 0.05);
-      setResults(filteredResults);
+
+      // Filter by similarity threshold (7%)
+      const filteredResults = response.results.filter(result => result.similarity > 0.07);
+
+      // Store all results
+      setAllResults(filteredResults);
+
+      // Display first 20 results
+      setDisplayedResults(filteredResults.slice(0, 20));
+
+      // Check if there are more results to load
+      setHasMore(filteredResults.length > 20);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
-      setResults([]);
+      setAllResults([]);
+      setDisplayedResults([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMore = () => {
+    const currentLength = displayedResults.length;
+    const nextBatch = allResults.slice(currentLength, currentLength + 20);
+    setDisplayedResults([...displayedResults, ...nextBatch]);
+    setHasMore(currentLength + nextBatch.length < allResults.length);
   };
 
   return (
@@ -111,44 +131,24 @@ export default function SearchByText() {
 
             {/* Collapsible Filters Area */}
             <div className={`space-y-6 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${showFilters ? 'max-h-[600px] opacity-100 pt-2' : 'max-h-0 opacity-0'}`}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Genre Filter */}
-                <div className="space-y-3">
-                  <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Genre</label>
-                  <div className="relative">
-                    <select
-                      value={selectedGenre}
-                      onChange={(e) => setSelectedGenre(e.target.value)}
-                      className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700/50 rounded-xl text-neutral-200 focus:ring-2 focus:ring-white/10 focus:border-white/20 appearance-none cursor-pointer hover:bg-neutral-800 transition-colors"
-                      disabled={loading}
-                    >
-                      <option value="">All Genres</option>
-                      {genres.map((genre) => (
-                        <option key={genre} value={genre}>{genre}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-neutral-500"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Results Count Slider */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Density</label>
-                    <span className="text-xs font-mono bg-white/10 px-2 py-1 rounded text-neutral-300">{resultsCount} items</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="500"
-                    value={resultsCount}
-                    onChange={(e) => setResultsCount(Number(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white hover:accent-neutral-200"
+              {/* Genre Filter */}
+              <div className="space-y-3">
+                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Genre</label>
+                <div className="relative">
+                  <select
+                    value={selectedGenre}
+                    onChange={(e) => setSelectedGenre(e.target.value)}
+                    className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700/50 rounded-xl text-neutral-200 focus:ring-2 focus:ring-white/10 focus:border-white/20 appearance-none cursor-pointer hover:bg-neutral-800 transition-colors"
                     disabled={loading}
-                  />
+                  >
+                    <option value="">All Genres</option>
+                    {genres.map((genre) => (
+                      <option key={genre} value={genre}>{genre}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-neutral-500"></div>
+                  </div>
                 </div>
               </div>
 
@@ -201,7 +201,11 @@ export default function SearchByText() {
 
       {/* Results Grid Area */}
       <div className="mt-16">
-        <ResultsGrid results={results} />
+        <ResultsGrid
+          results={displayedResults}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
+        />
       </div>
     </div>
   );

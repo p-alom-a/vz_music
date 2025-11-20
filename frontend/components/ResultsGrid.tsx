@@ -1,16 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SearchResult } from '@/types';
 import Image from 'next/image';
 
 interface ResultsGridProps {
   results: SearchResult[];
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export default function ResultsGrid({ results }: ResultsGridProps) {
+export default function ResultsGrid({ results, hasMore = false, onLoadMore }: ResultsGridProps) {
   // État pour stocker l'album actuellement sélectionné
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll avec IntersectionObserver
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    const currentSentinel = sentinelRef.current;
+    if (currentSentinel) {
+      observer.observe(currentSentinel);
+    }
+
+    return () => {
+      if (currentSentinel) {
+        observer.unobserve(currentSentinel);
+      }
+    };
+  }, [hasMore, onLoadMore]);
 
   if (results.length === 0) {
     return null;
@@ -58,6 +86,24 @@ export default function ResultsGrid({ results }: ResultsGridProps) {
               </button>
             ))}
           </div>
+
+          {/* Sentinel element for infinite scroll */}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-8">
+              <div className="flex items-center gap-2 text-neutral-400">
+                <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
+          )}
+
+          {/* End message when no more results */}
+          {!hasMore && results.length > 0 && (
+            <div className="text-center py-8 text-neutral-500 text-sm">
+              ✓ All relevant results displayed ({results.length} albums)
+            </div>
+          )}
         </div>
 
         {/* PARTIE DROITE : LE PANNEAU DE DÉTAILS (SIDEBAR)

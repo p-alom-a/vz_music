@@ -9,9 +9,11 @@ import YearRangeFilter from './YearRangeFilter';
 export default function SearchByImage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [allResults, setAllResults] = useState<SearchResult[]>([]); // All results from backend
+  const [displayedResults, setDisplayedResults] = useState<SearchResult[]>([]); // Currently displayed
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
   // Filters state
   const [selectedGenre, setSelectedGenre] = useState<string>('');
@@ -22,9 +24,6 @@ export default function SearchByImage() {
   const [maxYear, setMaxYear] = useState<number>(2024);
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1960);
   const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2024);
-
-  // Results count state
-  const [resultsCount, setResultsCount] = useState<number>(50);
 
   // Load genres and year range on component mount
   useEffect(() => {
@@ -88,20 +87,41 @@ export default function SearchByImage() {
     setError(null);
 
     try {
+      // Fetch 200 results from backend
       const response = await searchByImage(
         file,
-        resultsCount,
+        200,
         selectedGenre || undefined,
         selectedMinYear,
         selectedMaxYear
       );
-      setResults(response.results);
+
+      // Filter by similarity threshold (7%)
+      const filteredResults = response.results.filter(result => result.similarity > 0.07);
+
+      // Store all results
+      setAllResults(filteredResults);
+
+      // Display first 20 results
+      setDisplayedResults(filteredResults.slice(0, 20));
+
+      // Check if there are more results to load
+      setHasMore(filteredResults.length > 20);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
-      setResults([]);
+      setAllResults([]);
+      setDisplayedResults([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMore = () => {
+    const currentLength = displayedResults.length;
+    const nextBatch = allResults.slice(currentLength, currentLength + 20);
+    setDisplayedResults([...displayedResults, ...nextBatch]);
+    setHasMore(currentLength + nextBatch.length < allResults.length);
   };
 
   return (
@@ -196,7 +216,11 @@ export default function SearchByImage() {
         </div>
       )}
 
-      <ResultsGrid results={results} />
+      <ResultsGrid
+        results={displayedResults}
+        hasMore={hasMore}
+        onLoadMore={loadMore}
+      />
     </div>
   );
 }
