@@ -67,23 +67,9 @@ async def startup_event():
 
 @app.get("/")
 def root():
-    """API information endpoint."""
-    total_albums = search_service.get_album_count() if search_service else 0
-
-    return {
-        "message": "🎵 Shazam Visual - Album Cover Search Engine",
-        "status": "running",
-        "total_albums": total_albums,
-        "endpoints": {
-            "search_by_image": "POST /api/search-by-image",
-            "search_by_text": "GET /api/search-by-text",
-            "get_genres": "GET /api/genres",
-            "stats": "GET /api/stats",
-            "health": "GET /health",
-            "docs": "GET /docs"
-        },
-        "documentation": "/docs"
-    }
+    """Redirect to frontend."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="https://vzmusic.vercel.app/")
 
 
 @app.get("/health")
