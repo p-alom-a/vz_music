@@ -14,7 +14,6 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
   // État pour stocker l'album actuellement sélectionné
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const detailsPanelRef = useRef<HTMLDivElement>(null);
 
   // Infinite scroll avec IntersectionObserver
   useEffect(() => {
@@ -41,22 +40,16 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
     };
   }, [hasMore, onLoadMore]);
 
-  // Auto-scroll vers le panneau de détails sur mobile quand un album est sélectionné
+  // Empêcher le scroll du body quand la modale est ouverte sur mobile
   useEffect(() => {
-    if (selectedResult && detailsPanelRef.current) {
-      // Vérifie si on est sur mobile (largeur < 1024px, breakpoint lg de Tailwind)
-      const isMobile = window.innerWidth < 1024;
-
-      if (isMobile) {
-        // Petit délai pour laisser le temps au panneau de s'afficher
-        setTimeout(() => {
-          detailsPanelRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          });
-        }, 100);
-      }
+    if (selectedResult && window.innerWidth < 1024) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
     }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, [selectedResult]);
 
   if (results.length === 0) {
@@ -70,15 +63,13 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
       </h2>
 
       <div className="flex flex-col lg:flex-row gap-6 relative items-start">
-        
-        {/* PARTIE GAUCHE : LA GRILLE D'IMAGES 
-           Elle prend toute la largeur par défaut, ou se réduit si le panneau est ouvert.
-        */}
-        <div className={`transition-all duration-300 ease-in-out ${selectedResult ? 'w-full lg:w-2/3' : 'w-full'}`}>
+
+        {/* LA GRILLE D'IMAGES - Pleine largeur sur mobile, réduite sur desktop si panneau ouvert */}
+        <div className={`transition-all duration-300 ease-in-out w-full ${selectedResult ? 'lg:w-2/3' : ''}`}>
           <div className={`grid gap-4 ${
-            selectedResult 
-              ? 'grid-cols-2 md:grid-cols-3' // Moins de colonnes si panneau ouvert
-              : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' // Pleine largeur
+            selectedResult
+              ? 'grid-cols-2 md:grid-cols-3'
+              : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
           }`}>
             {results.map((result, index) => (
               <button
@@ -125,87 +116,102 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
           )}
         </div>
 
-        {/* PARTIE DROITE : LE PANNEAU DE DÉTAILS (SIDEBAR)
-           S'affiche uniquement si un résultat est sélectionné.
-           Utilisation de 'sticky' pour qu'il reste visible quand on scroll la grille.
-        */}
+        {/* PANNEAU DE DÉTAILS - Modale plein écran sur mobile, sidebar sticky sur desktop */}
         {selectedResult && (
-          <div ref={detailsPanelRef} className="w-full lg:w-1/3 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden">
-              
-              {/* Header du panneau avec bouton fermer */}
-              <div className="relative">
-                <button
-                  onClick={() => setSelectedResult(null)}
-                  className="absolute top-3 right-3 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-colors"
-                  aria-label="Close details"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                
-                {/* Grande image de couverture */}
-                <div className="aspect-square relative bg-gray-100 w-full">
-                  <Image
-                    src={selectedResult.cover_url}
-                    alt={selectedResult.album_name}
-                    fill
-                    className="object-cover"
-                    priority
-                  />
-                </div>
-              </div>
+          <>
+            {/* Backdrop pour mobile */}
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+              onClick={() => setSelectedResult(null)}
+            />
 
-              {/* Contenu détaillé */}
-              <div className="p-6 space-y-6">
-                
-                {/* Titres */}
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900 leading-tight mb-1">
-                    {selectedResult.album_name}
-                  </h3>
-                  <p className="text-lg text-blue-600 font-medium">
-                    {selectedResult.artist}
-                  </p>
-                </div>
+            {/* Panneau de détails */}
+            <div className={`
+              fixed lg:relative
+              inset-x-0 bottom-0 lg:inset-auto
+              w-full lg:w-1/3
+              max-h-[90vh] lg:max-h-none
+              lg:sticky lg:top-8
+              z-50 lg:z-auto
+              animate-in slide-in-from-bottom lg:slide-in-from-right-4 fade-in
+              duration-300
+            `}>
+              <div className="bg-white rounded-t-3xl lg:rounded-xl border-t lg:border border-gray-200 shadow-2xl overflow-hidden max-h-[90vh] lg:max-h-none overflow-y-auto">
 
-                {/* Grid d'infos */}
-                <div className="grid grid-cols-2 gap-4 py-4 border-y border-gray-100">
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Year</p>
-                    <p className="text-gray-700 font-medium">{selectedResult.release_year || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Genre</p>
-                    <p className="text-gray-700 font-medium capitalize">
-                      {selectedResult.genre ? selectedResult.genre.split('/')[0] : 'Unknown'}
-                    </p>
-                  </div>
-                </div>
+                {/* Header du panneau avec bouton fermer */}
+                <div className="relative">
+                  <button
+                    onClick={() => setSelectedResult(null)}
+                    className="absolute top-3 right-3 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-colors"
+                    aria-label="Close details"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
 
-                {/* Score de similarité (plus visuel) */}
-                <div>
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-sm font-medium text-gray-700">Visual Match Score</span>
-                    <span className="text-xl font-bold text-blue-600">
-                      {Math.round(selectedResult.similarity * 100)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
-                      style={{ width: `${Math.round(selectedResult.similarity * 100)}%` }}
+                  {/* Grande image de couverture */}
+                  <div className="aspect-square relative bg-gray-100 w-full">
+                    <Image
+                      src={selectedResult.cover_url}
+                      alt={selectedResult.album_name}
+                      fill
+                      className="object-cover"
+                      priority
                     />
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Based on visual vector analysis of the cover art.
-                  </p>
                 </div>
 
+                {/* Contenu détaillé */}
+                <div className="p-6 space-y-6">
+
+                  {/* Titres */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 leading-tight mb-1">
+                      {selectedResult.album_name}
+                    </h3>
+                    <p className="text-lg text-blue-600 font-medium">
+                      {selectedResult.artist}
+                    </p>
+                  </div>
+
+                  {/* Grid d'infos */}
+                  <div className="grid grid-cols-2 gap-4 py-4 border-y border-gray-100">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Year</p>
+                      <p className="text-gray-700 font-medium">{selectedResult.release_year || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Genre</p>
+                      <p className="text-gray-700 font-medium capitalize">
+                        {selectedResult.genre ? selectedResult.genre.split('/')[0] : 'Unknown'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Score de similarité (plus visuel) */}
+                  <div>
+                    <div className="flex justify-between items-end mb-2">
+                      <span className="text-sm font-medium text-gray-700">Visual Match Score</span>
+                      <span className="text-xl font-bold text-blue-600">
+                        {Math.round(selectedResult.similarity * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
+                        style={{ width: `${Math.round(selectedResult.similarity * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Based on visual vector analysis of the cover art.
+                    </p>
+                  </div>
+
+                </div>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
