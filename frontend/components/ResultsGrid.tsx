@@ -14,6 +14,7 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
   // État pour stocker l'album actuellement sélectionné
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const detailsPanelRef = useRef<HTMLDivElement>(null);
 
   // Infinite scroll avec IntersectionObserver
   useEffect(() => {
@@ -39,6 +40,24 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
       }
     };
   }, [hasMore, onLoadMore]);
+
+  // Auto-scroll vers le panneau de détails sur mobile quand un album est sélectionné
+  useEffect(() => {
+    if (selectedResult && detailsPanelRef.current) {
+      // Vérifie si on est sur mobile (largeur < 1024px, breakpoint lg de Tailwind)
+      const isMobile = window.innerWidth < 1024;
+
+      if (isMobile) {
+        // Petit délai pour laisser le temps au panneau de s'afficher
+        setTimeout(() => {
+          detailsPanelRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }, 100);
+      }
+    }
+  }, [selectedResult]);
 
   if (results.length === 0) {
     return null;
@@ -111,7 +130,7 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
            Utilisation de 'sticky' pour qu'il reste visible quand on scroll la grille.
         */}
         {selectedResult && (
-          <div className="w-full lg:w-1/3 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div ref={detailsPanelRef} className="w-full lg:w-1/3 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden">
               
               {/* Header du panneau avec bouton fermer */}
