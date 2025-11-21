@@ -1,8 +1,8 @@
 ---
 title: Find Albums by Visual Similarity
 emoji: 🎵
-colorFrom: purple
-colorTo: pink
+colorFrom: green
+colorTo: gray
 sdk: docker
 pinned: false
 ---
