@@ -15,8 +15,11 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Copy app code and modules
 COPY app.py ./
+COPY config.py ./
+COPY services/ ./services/
+COPY models/ ./models/
 
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860

@@ -24,3 +24,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Development and planning files (not for production)
+CLAUDE.md
+claude-code-plan.md
+PLAN.md
+DEPLOY.md
+PGVECTOR_40_RESULTS_FIX.md
+SOLUTION*.sql
+.mcp.json
+.claude/
