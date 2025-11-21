@@ -80,6 +80,27 @@ node_modules/
 .next/
 out/
 
+# Images and test files (not needed for deployment)
+images/
+*.test.py
+test_*.py
+
+# Old backend files (keep only backend/hf-space-deploy/)
+backend/.gitignore
+backend/Procfile
+backend/main.py
+backend/start.sh
+backend/test_*.py
+backend/utils/
+backend/models/*.index
+backend/models/*.pkl
+backend/models/album_covers.index
+backend/models/metadata.pkl
+backend/venv/
+backend/__pycache__/
+backend/README.md
+backend/requirements.txt
+
 # Development files
 database.ipynb
 upload_to_hf.py
@@ -93,8 +114,8 @@ PGVECTOR*.md
 .claude/
 
 # Only keep what's needed for HF Space:
-# - backend/ (API source code)
+# - backend/hf-space-deploy/ (clean API source)
 # - Dockerfile
-# - requirements.txt
-# - README.md
+# - requirements.txt (root)
+# - README.md (root)
 # - .gitignore_hf
