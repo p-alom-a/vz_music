@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 import torch
@@ -101,31 +101,8 @@ async def startup_event():
 
 @app.get("/")
 def root():
-    """API information endpoint"""
-    # Get total albums count
-    total_albums = 0
-    if supabase:
-        try:
-            count_response = supabase.table('album_covers').select('id', count='exact').limit(1).execute()
-            total_albums = count_response.count if hasattr(count_response, 'count') else 0
-        except:
-            pass
-
-    return {
-        "message": "🎵 Shazam Visual - Album Cover Search Engine",
-        "status": "running",
-        "total_albums": total_albums,
-        "endpoints": {
-            "search_by_image": "POST /api/search-by-image",
-            "search_by_text": "GET /api/search-by-text",
-            "get_genres": "GET /api/genres",
-            "get_year_range": "GET /api/year-range",
-            "stats": "GET /api/stats",
-            "health": "GET /health",
-            "docs": "GET /docs"
-        },
-        "documentation": "/docs"
-    }
+    """Redirect to frontend"""
+    return RedirectResponse(url="https://vzmusic.vercel.app/")
 
 
 @app.get("/health")
