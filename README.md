@@ -7,15 +7,16 @@ sdk: docker
 pinned: false
 ---
 
-# 🎵 Shazam Visual - Album Cover Search
+# 🎵 Visual Album Cover Search Engine
 
-Visual search engine for album covers using **CLIP** embeddings and **FAISS**. Find similar albums by uploading an image or describing what you're looking for!
+Visual search engine for album covers using **CLIP** embeddings. Find similar albums by uploading an image or describing what you're looking for!
 
 ## 🚀 Features
 
 - **Search by Image**: Upload an album cover to find visually similar albums
 - **Search by Text**: Describe what you're looking for (e.g., "dark metal album", "red cover")
-- **Fast Search**: 20,000 albums indexed with FAISS for instant similarity search
+- **Genre Filtering**: Filter search results by music genre
+- **Fast Search**: 15,000+ albums indexed for instant similarity search
 - **Powered by CLIP**: OpenAI's CLIP model for multimodal understanding
 
 ## 🔧 API Endpoints
@@ -28,13 +29,25 @@ GET /health
 ### Search by Text
 ```bash
 GET /api/search-by-text?query=dark+album&k=5
+GET /api/search-by-text?query=guitar&genre=Rock&k=10
 ```
 
 ### Search by Image
 ```bash
 POST /api/search-by-image?k=5
+POST /api/search-by-image?k=5&genre=Electronic
 Content-Type: multipart/form-data
 Body: file=<image file>
+```
+
+### Get Genres
+```bash
+GET /api/genres
+```
+
+### Get Statistics
+```bash
+GET /api/stats
 ```
 
 ## 📊 Response Format
@@ -45,9 +58,15 @@ Body: file=<image file>
   "query_type": "text",
   "results": [
     {
-      "album_id": 12345,
-      "genre_id": 8,
-      "similarity_score": 0.95
+      "id": "12345",
+      "artist": "Artist Name",
+      "album_name": "Album Title",
+      "genre": "Rock",
+      "release_year": 2020,
+      "pitchfork_score": 8.5,
+      "best_new_music": true,
+      "cover_url": "https://...",
+      "similarity": 0.95
     }
   ]
 }
@@ -56,13 +75,14 @@ Body: file=<image file>
 ## 💻 Tech Stack
 
 - **Backend**: FastAPI + Python 3.11
-- **ML Models**: CLIP (ViT-B/32) + FAISS
+- **ML Models**: CLIP (openai/clip-vit-base-patch32)
 - **Frontend**: Next.js 15 + TypeScript + Tailwind CSS
+- **Database**: PostgreSQL with pgvector extension
 
 ## 🌐 Live Demo
 
 - **Backend API**: This HuggingFace Space
-- **Frontend**: [Coming soon]
+- **Frontend**: https://vz-music.vercel.app
 
 ## 📚 Documentation
 
@@ -82,5 +102,5 @@ MIT License - See repository for details
 
 ---
 
-Built with ❤️ using CLIP and FAISS
+Built with ❤️ using CLIP embeddings and vector similarity search
 # Clean state
