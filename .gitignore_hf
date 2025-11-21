@@ -73,3 +73,31 @@ htmlcov/
 *.temp
 tmp/
 temp/
+
+# Frontend (not needed for backend Space)
+frontend/
+node_modules/
+.next/
+out/
+
+# Backend source (using hf-space-deploy instead)
+backend/
+
+# Development files
+database.ipynb
+upload_to_hf.py
+CLAUDE.md
+PLAN.md
+DEPLOY.md
+claude-code-plan.md
+SOLUTION*.sql
+PGVECTOR*.md
+.mcp.json
+.claude/
+
+# Only keep what's needed for HF Space:
+# - hf-space-deploy/ (copied by Dockerfile)
+# - Dockerfile
+# - requirements.txt
+# - README.md
+# - .gitignore_hf
