@@ -14,7 +14,7 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Infinite scroll
+  // Infinite scroll logic
   useEffect(() => {
     if (!hasMore || !onLoadMore) return;
     const observer = new IntersectionObserver(
@@ -30,7 +30,7 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
     };
   }, [hasMore, onLoadMore]);
 
-  // Lock body scroll on mobile when modal is open
+  // Lock body scroll UNIQUEMENT sur mobile pour éviter le double scroll
   useEffect(() => {
     if (selectedResult && window.innerWidth < 1024) {
       document.body.style.overflow = 'hidden';
@@ -43,12 +43,13 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
   if (results.length === 0) return null;
 
   return (
-    <div className="mt-8 w-full px-4 md:px-8 pb-12">
+    <div className="mt-8 w-full px-4 md:px-8 pb-12 relative">
       <h2 className="text-2xl font-medium text-gray-700 mb-6 tracking-tight">
         Résultats <span className="text-gray-400 ml-2 text-lg font-normal">{results.length}</span>
       </h2>
 
-      <div className="flex flex-col lg:flex-row gap-8 relative items-start">
+      {/* Container FLEX pour Desktop */}
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
 
         {/* --- PARTIE GAUCHE : GRILLE --- */}
         <div className={`transition-all duration-500 ease-in-out w-full ${selectedResult ? 'lg:w-2/3' : ''}`}>
@@ -99,29 +100,48 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
           )}
         </div>
 
-        {/* --- PARTIE DROITE : DETAIL VIEW (Sidebar Desktop / Bottom Sheet Mobile) --- */}
+        {/* --- PARTIE DROITE : DETAIL VIEW --- */}
         {selectedResult && (
           <>
-            {/* Backdrop sombre (Mobile uniquement) */}
+            {/* MOBILE ONLY: BACKDROP 
+               Couvre tout l'écran, derrière la carte.
+            */}
             <div
-              className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 lg:hidden transition-opacity duration-300"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
               onClick={() => setSelectedResult(null)}
             />
 
-            {/* Container Principal */}
+            {/* WRAPPER RESPONSIVE 
+               Mobile: Fixed en bas (Bottom Sheet)
+               Desktop: Sticky en haut (Sidebar)
+            */}
             <div className={`
-              fixed lg:sticky 
-              inset-x-0 bottom-0 lg:inset-auto lg:top-8 
-              z-50 lg:z-auto
-              w-full lg:w-1/3 lg:min-w-[380px]
-              max-h-[85vh] lg:max-h-none
-              animate-in slide-in-from-bottom duration-300 lg:duration-500 lg:slide-in-from-right-4 lg:fade-in
+              /* MOBILE STYLES */
+              fixed inset-x-0 bottom-0 z-50 
+              h-auto max-h-[85vh] 
+              w-full rounded-t-[2rem] bg-white shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)]
+              flex flex-col
+              animate-in slide-in-from-bottom duration-300
+
+              /* DESKTOP STYLES */
+              lg:sticky lg:top-6 lg:bottom-auto lg:inset-x-auto
+              lg:w-1/3 lg:min-w-[380px] 
+              lg:h-[calc(100vh-3rem)] lg:max-h-none
+              lg:rounded-[2rem] lg:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] lg:bg-transparent
+              lg:border-none
+              lg:animate-in lg:slide-in-from-right-4 lg:fade-in lg:duration-500
             `}>
               
-              <div className="bg-white rounded-t-[2rem] lg:rounded-[2rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] lg:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden h-full flex flex-col">
+              {/* CONTENU INTERNE 
+                 C'est ici qu'on met l'overflow-y-auto pour que SEULE la carte scroll, pas la page.
+              */}
+              <div className="flex flex-col h-full overflow-hidden bg-white lg:rounded-[2rem] lg:border lg:border-gray-100">
                 
-                {/* Header avec Image */}
+                {/* Header (Image + Close button) */}
                 <div className="relative flex-shrink-0 p-2 pb-0">
+                  {/* Handle pour mobile (barre grise) */}
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-gray-200 rounded-full lg:hidden z-20" />
+                  
                   <button
                     onClick={() => setSelectedResult(null)}
                     className="absolute top-6 right-6 z-20 p-2 bg-white/80 hover:bg-white text-gray-500 rounded-full shadow-sm backdrop-blur-md transition-all border border-white/50"
@@ -130,9 +150,6 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-
-                  {/* Barre poignée pour mobile (indicateur de swipe) */}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-gray-200 rounded-full lg:hidden z-20" />
 
                   <div className="relative w-full aspect-square rounded-[1.5rem] overflow-hidden shadow-sm bg-gray-50">
                     <Image
@@ -145,8 +162,10 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
                   </div>
                 </div>
 
-                {/* Contenu Scrollable (si le texte est long sur mobile) */}
-                <div className="p-6 pt-6 space-y-6 overflow-y-auto overscroll-contain">
+                {/* SCROLLABLE CONTENT AREA
+                   overscroll-contain empêche le "scroll chaining" sur mobile
+                */}
+                <div className="flex-1 overflow-y-auto overscroll-contain p-6 pt-6 space-y-6">
                   <div className="space-y-1">
                     <h3 className="text-2xl font-semibold text-gray-800 leading-tight tracking-tight">
                       {selectedResult.album_name}
@@ -156,7 +175,6 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
                     </p>
                   </div>
 
-                  {/* Tags */}
                   <div className="flex flex-wrap gap-2">
                      <span className="px-4 py-1.5 bg-gray-50 text-gray-600 text-sm font-medium rounded-full border border-gray-100">
                        {selectedResult.release_year || 'N/A'}
@@ -166,7 +184,6 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
                      </span>
                   </div>
 
-                  {/* Barre Similarité */}
                   <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100/50 mb-4">
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-sm text-gray-500 font-medium">Correspondance visuelle</span>
@@ -181,6 +198,9 @@ export default function ResultsGrid({ results, hasMore = false, onLoadMore }: Re
                       />
                     </div>
                   </div>
+                  
+                  {/* Espace vide en bas pour mobile pour ne pas coller au bord */}
+                  <div className="h-8 lg:hidden"></div>
                 </div>
 
               </div>
