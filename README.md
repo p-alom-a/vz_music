@@ -83,3 +83,4 @@ MIT License - See repository for details
 ---
 
 Built with ❤️ using CLIP and FAISS
+# Clean state
