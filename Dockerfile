@@ -16,10 +16,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy app code and modules
-COPY backend/hf-space-deploy/app.py ./
-COPY backend/hf-space-deploy/config.py ./
-COPY backend/hf-space-deploy/services/ ./services/
-COPY backend/hf-space-deploy/models/ ./models/
+COPY backend/api/app.py ./
+COPY backend/api/config.py ./
+COPY backend/api/services/ ./services/
+COPY backend/api/models/ ./models/
 
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860
