@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    unoptimized: true,
     domains: ['media.pitchfork.com', 'pepouze5-vz-music.hf.space'],
     remotePatterns: [
       {
